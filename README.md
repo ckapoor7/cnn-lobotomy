@@ -8,6 +8,23 @@ A small disclaimer before anything else: this is my first completely vibe-coded 
 
 (A higher quality version of the above is in [`docs/demo.mp4`](docs/demo.mp4).)
 
+## Installation
+
+The project is managed with [uv](https://docs.astral.sh/uv/), so the only thing to install by hand is uv itself (`curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`). The dependencies are just PyTorch, torchvision, NumPy and Pillow (Python 3.11 or newer), pinned in `uv.lock`. Nothing else is needed on the Python side: the server uses the standard library's HTTP server, so there is no web framework to install. The front end loads three.js and KaTeX from a CDN, so an internet connection is needed for the browser.
+
+I have not published the trained weights (maybe at some point later, if there is a need for it), so the model has to be trained from scratch first:
+
+```bash
+git clone git@github.com:ckapoor7/cnn-lobotomy.git && cd cnn-lobotomy
+uv sync                      # creates .venv with the locked dependencies
+uv run train.py              # downloads CIFAR-100 (~170 MB) and trains (~40 min on an M-series Mac)
+uv run build_index.py        # per-kernel statistics over the test set (~1 min)
+uv run feature_viz.py        # both feature visualization flavors, every layer (~10 min)
+uv run server.py             # then open http://localhost:8000
+```
+
+`train.py` picks CUDA, MPS or the CPU automatically. `feature_viz.py` takes `--mode channel|center|both` and an optional list of layers.
+
 ## Overview
 
 A question I kept coming back to while working on representational alignment was a fairly simple one: if a network has a kernel that looks like a "dog detector", what actually happens when you switch it off? Does the network forget what a dog is, or does it barely notice?
@@ -103,7 +120,7 @@ This is where the lobotomy happens. An image from the test set is loaded on the 
 
 - **Probe:** click on any cell of the image (at the resolution of the selected layer) to list the channels firing at that position. From there, a channel can be silenced at just that one position, or everywhere.
 - **Ablation set:** any number of whole channels and individual (channel, y, x) units from any layer. Predictions before and after are shown side by side.
-- **Zero vs. mean ablation:** silenced units are either set to 0 or to their average value over the test set. The difference matters more than one would think (see results).
+- **Zero vs. mean ablation:** silenced units are either set to 0 or to their average value over the test set. The two can disagree quite a lot, particularly in the last layer, so it is worth checking both.
 - **Attribution:** the channels pushing the model towards its prediction, ranked by $\sum_{y,x} a \odot \nabla_a\, y_c$ (activation times gradient of the class logit), with a spatial map for each.
 - **Occlusion sensitivity:** slide a gray square (4, 8 or 12 pixels) across the image and see where the prediction's probability (or the open kernel's activation) drops. This is the other experiment from the Zeiler–Fergus paper.
 - **Evaluate on test set:** re-runs all 10,000 test images with the current ablation set, and reports the overall accuracy, the most damaged classes and superclasses, and which classes the changed predictions went to.
@@ -118,38 +135,7 @@ To answer "how many kernels does it take to break a concept?", the sweep ablates
 
 It reports the first $N$ at which the drop is statistically significant (an exact one-sided McNemar test on the paired predictions, $p < 0.05$), the first $N$ at which the concept's accuracy is halved, and the first $N$ at which the other classes lose 2 points.
 
-## Results
-
-So far I have mostly played around with the class *orange* (95% baseline accuracy), which has some fairly obvious detectors.
-
-**Final layer (`layer4.1`):** the single most selective kernel, #355, has a $d'$ of 4.61 for orange. Silencing it on its own only drops orange to 93%, with most of the lost images being predicted as apples. Silencing the top 10 brings it down to 85%, mostly to *sweet pepper*, *apple*, *tulip* and *pear*. Under zero ablation, orange accuracy is halved at $N=50$ and reaches 0% at $N=80$, while the other 99 classes barely move (76.7% to 76.2%).
-
-That looks like a clean "orange circuit", but mean ablation tells a different story: orange bottoms out at about 72% and never drops further. This is because `layer4.1` is followed only by average pooling and the final linear layer, so zeroing the orange kernels mostly just deletes the positive weight going into the orange logit. Mean ablation removes the *information* in the kernels instead, and the remaining ~400 kernels turn out to carry more than enough of it. In other words, at the last layer the concept is heavily redundant.
-
-**Middle layer (`layer2.0`):** here, zero and mean ablation agree, and orange is halved at $N = 13$ (out of 128 kernels) and gone by $N = 30$, while 13 random kernels only bring it down to 82%. However, the other classes start losing accuracy at $N = 8$. The top 13 orange kernels take 51 points off orange, but also 28 points off *woman* and 25 off *crab*. At this depth, the kernels encode things like color and texture which many classes rely on, so the lobotomy is much less surgical.
-
-The takeaway so far: concepts are concentrated but entangled early on, and specific but redundant later.
-
-## Running it
-
-### Requirements
-
-Python 3.11, PyTorch 2.4, torchvision, NumPy and Pillow. Nothing else is needed on the Python side: the server uses the standard library's HTTP server, so there is no web framework to install. The front end loads three.js and KaTeX from a CDN, so an internet connection is needed for the browser.
-
-### Steps
-
-I have not published the trained weights (maybe at some point later, if there is a need for it), so the model has to be trained from scratch first:
-
-```bash
-python train.py          # downloads CIFAR-100 (~170 MB) and trains (~40 min on an M-series Mac)
-python build_index.py    # per-kernel statistics over the test set (~1 min)
-python feature_viz.py    # both feature visualization flavors, every layer (~10 min)
-python server.py         # then open http://localhost:8000
-```
-
-`train.py` picks CUDA, MPS or the CPU automatically. `feature_viz.py` takes `--mode channel|center|both` and an optional list of layers.
-
-### Files
+## Project structure
 
 | file | what it does |
 |---|---|
@@ -160,15 +146,9 @@ python server.py         # then open http://localhost:8000
 | `server.py` | HTTP + JSON server: ablation hooks, probing, attribution, projections, occlusion, evaluation and sweeps |
 | `static/index.html` | the interface |
 | `static/map.js` | the three.js map |
+| `pyproject.toml`, `uv.lock` | dependencies, for `uv sync` |
 
 Trained weights, the cached index and the dataset are excluded from git (`checkpoints/`, `cache/`, `data/`).
-
-## Future scope
-
-- **Sparse autoencoders.** Many kernels respond to several unrelated things (#355 is also fairly selective for rockets and hamsters). A sparse dictionary trained on `layer4` activations would likely give cleaner features to silence than raw channels.
-- **Bigger models and ImageNet.** Everything here is architecture agnostic apart from the receptive field bookkeeping, and ImageNet would give much more natural concepts than CIFAR's 100 classes (along with actual dogs).
-- **A better random control.** The sweep currently uses a single fixed random ordering of kernels, which is one sample rather than a distribution.
-- **Circuits across layers.** At the moment, ablations are measured at the output. Tracing how silencing a `layer2` kernel changes the `layer4` kernels downstream of it would be the natural next step.
 
 ## References
 
