@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cnn-lobotomy</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>
+:root {
+  --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e6e8ee; --dim: #8b93a7;
+  --accent: #6aa9ff; --warn: #ff7a6a; --good: #59d48a; --chip: #222835;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14.5px/1.4 KaTeX_Main, "Latin Modern Roman", "Computer Modern Serif", serif; } /* KaTeX_Main is Computer Modern */
+.katex { font-size: 1.05em; text-transform: none; }
+header { display: flex; gap: 16px; align-items: baseline; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; margin: 0; }
+header .dim { color: var(--dim); }
+main { display: grid; grid-template-columns: 300px 1fr 460px; height: calc(100vh - 42px); }
+section { overflow-y: auto; padding: 12px; border-right: 1px solid var(--line); }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 14px 0 6px; }
+h2:first-child { margin-top: 0; }
+select, input, button { background: var(--chip); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+button { cursor: pointer; } button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #0b1020; border-color: var(--accent); font-weight: 600; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.tabs button.on { border-color: var(--accent); color: var(--accent); }
+.nlist div { display: grid; grid-template-columns: 44px 1fr 46px; gap: 6px; padding: 4px 6px; border-radius: 5px; cursor: pointer; align-items: center; }
+.nlist div:hover, .nlist div.on { background: var(--chip); }
+.nlist .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+.nlist .lbl b { color: var(--text); font-weight: 500; }
+.num { font-variant-numeric: tabular-nums; text-align: right; }
+.chip { display: inline-flex; gap: 6px; align-items: center; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 2px 4px 2px 9px; margin: 2px; }
+.chip button { border: 0; padding: 0 6px; background: none; color: var(--dim); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.cell { position: relative; cursor: pointer; }
+.cell canvas { width: 100%; border-radius: 4px; display: block; image-rendering: pixelated; }
+.cell .cap { font-size: 11px; color: var(--dim); display: flex; justify-content: space-between; }
+.bars div { display: grid; grid-template-columns: 110px 1fr 48px; gap: 6px; align-items: center; margin: 2px 0; }
+.bar { height: 10px; background: var(--chip); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.bar i.after { background: var(--warn); }
+.empty { color: var(--dim); padding: 20px 0; }
+#big { width: 288px; height: 288px; image-rendering: pixelated; cursor: crosshair; border-radius: 6px; }
+.thumbs { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.thumbs img { width: 40px; height: 40px; image-rendering: pixelated; cursor: pointer; border-radius: 3px; border: 2px solid transparent; }
+.thumbs img.on { border-color: var(--accent); }
+.list div { display: grid; grid-template-columns: 52px 1fr auto; gap: 6px; align-items: center; padding: 3px 4px; border-radius: 4px; }
+.list div:hover { background: var(--chip); }
+.list a { color: var(--accent); cursor: pointer; text-decoration: none; }
+.mini { font-size: 11px; padding: 2px 6px; }
+table { border-collapse: collapse; width: 100%; } td, th { padding: 3px 4px; text-align: left; border-bottom: 1px solid var(--line); }
+th { color: var(--dim); font-weight: 500; }
+.neg { color: var(--warn); } .pos { color: var(--good); }
+.hint { color: var(--dim); font-size: 12px; }
+#center { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+#center > .tabs { padding: 8px 12px; border-bottom: 1px solid var(--line); margin: 0; }
+#neuron { overflow-y: auto; padding: 12px; flex: 1; }
+#mapView { position: relative; flex: 1; min-height: 0; }
+#mapView canvas { display: block; }
+#mapCtl { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; }
+#mapLegend { position: absolute; bottom: 8px; left: 8px; z-index: 2; max-width: 70%; }
+.mlabel { position: absolute; transform: translate(-50%, -100%); font-size: 11px; color: var(--dim); cursor: pointer; white-space: nowrap; z-index: 1; padding: 1px 5px; border-radius: 4px; }
+.mlabel:hover, .mlabel.on { color: var(--text); background: var(--chip); }
+#tip { position: absolute; pointer-events: none; z-index: 3; background: rgba(23,26,33,.96); border: 1px solid var(--line); border-radius: 8px; padding: 8px; width: 236px; display: none; }
+#tip .fv { width: 96px; height: 96px; image-rendering: pixelated; border-radius: 4px; float: left; margin-right: 8px; background-repeat: no-repeat; }
+#tip .tops img { width: 52px; height: 52px; image-rendering: pixelated; border-radius: 3px; margin: 6px 4px 0 0; }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; }
+.zf { display: grid; grid-template-columns: repeat(3, 72px); gap: 4px; }
+.zf img { width: 72px; height: 72px; image-rendering: pixelated; border-radius: 3px; display: block; cursor: pointer; background: #000; object-fit: contain; }
+#sweep { overflow-y: auto; padding: 12px; flex: 1; }
+.sw-chart { position: relative; }
+.sw-chart svg text { fill: var(--dim); font-size: 11px; }
+.sw-tip { position: absolute; pointer-events: none; background: rgba(23,26,33,.96); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px; display: none; white-space: nowrap; }
+.sw-tip .k { display: grid; grid-template-columns: 10px 1fr auto; gap: 6px; align-items: center; }
+.stat { display: inline-block; margin: 0 18px 8px 0; } .stat b { display: block; font-size: 22px; font-weight: 600; }
+.fvbig { width: 160px; height: 160px; image-rendering: pixelated; border-radius: 6px; background-repeat: no-repeat; }
+</style>
+<script type="importmap">{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<header><h1>cnn-lobotomy</h1><span class="dim">ResNet18 · CIFAR-100</span><span class="dim" id="acc"></span></header>
+<main>
+<section>
+  <h2>Layer</h2>
+  <div class="row tabs" id="layers"></div>
+  <h2>Concept</h2>
+  <div class="row">
+    <select id="concept" style="width:100%"><option value="">any (max selectivity)</option></select>
+  </div>
+  <div class="row" id="topn" hidden>
+    <span class="hint">ablate top</span>
+    <input id="nTop" type="number" value="10" min="1" style="width:60px">
+    <button id="ablTop">add to set</button>
+    <button id="sweepBtn" class="primary">sweep N</button>
+  </div>
+  <h2>Channels <span class="hint" id="scoreName"></span></h2>
+  <div class="nlist" id="nlist"></div>
+</section>
+
+<section id="center">
+  <div class="row tabs"><button id="tabMap" class="on">Map</button><button id="tabNeuron">Neuron</button><button id="tabSweep">Sweep</button>
+    <span class="hint" style="margin-left:auto">drag to orbit · scroll to zoom · click a layer name to view it face-on</span></div>
+  <div id="mapView">
+    <div id="mapCtl">
+      <select id="colorMode">
+        <option value="coarse">color: top superclass</option>
+        <option value="concept">color: selectivity for concept (left)</option>
+        <option value="fires">color: activation on lab image</option>
+        <option value="ablation">color: ablation set</option>
+      </select>
+      <select id="layoutMode"><option value="grid">layout: channel index</option><option value="similar">layout: similar class profile</option></select>
+      <select id="fvKind"><option value="center">viz: center unit</option><option value="channel">viz: whole channel</option></select>
+      <button id="overview">overview</button>
+    </div>
+    <div id="mapLegend" class="hint"></div>
+    <div id="tip"></div>
+  </div>
+  <div id="sweep" hidden><div class="empty">Pick a concept on the left and press “sweep N”.</div></div>
+  <div id="neuron" hidden><div class="empty">Pick a channel on the map or the list.</div></div>
+</section>
+
+<section style="border-right:0">
+  <h2>Ablation set</h2>
+  <div id="ablset"></div>
+  <div class="row" style="margin-top:6px">
+    <select id="mode"><option value="zero">zero-ablate</option><option value="mean">mean-ablate</option></select>
+    <button id="clear">clear</button>
+    <button class="primary" id="evalBtn">evaluate on test set</button>
+  </div>
+  <div id="evalOut"></div>
+
+  <h2>Image</h2>
+  <div class="row">
+    <select id="imgClass"></select>
+    <input id="imgIdx" type="number" min="0" max="9999" value="0" style="width:80px">
+    <button id="rand">random</button>
+  </div>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="row">
+    <canvas id="big" width="288" height="288"></canvas>
+    <div style="flex:1;min-width:140px">
+      <div class="hint">overlay</div>
+      <select id="ovLayer"></select>
+      <div class="hint" style="margin-top:6px">Click a cell to see which channels fire there.</div>
+      <div class="hint" style="margin-top:10px">occlusion sensitivity</div>
+      <div class="row"><select id="occSize"><option value="4">4px</option><option value="8" selected>8px</option><option value="12">12px</option></select>
+        <button class="mini" id="occCls">prediction</button><button class="mini" id="occUnit">open neuron</button></div>
+      <div id="ovInfo" class="hint" style="margin-top:6px"></div>
+    </div>
+  </div>
+  <div id="preds"></div>
+  <div id="probeOut"></div>
+  <div id="attrOut"></div>
+</section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+function tex(s) { return katex.renderToString(String(s), { throwOnError: false }); } // inline LaTeX math mode
+const S = { meta: null, layer: "layer4.1", concept: "", list: [], sel: null, abl: [], img: 0, fvKind: "center", ovLayer: "layer4.1", run: null, overlay: null, cell: null };
+const api = async (path, body) => {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const j = await r.json(); if (j.error) { alert(j.error); throw j.error; } return j;
+};
+const short = l => l === "stem" ? "stem" : "L" + l.slice(5);
+const fmt = (v, d = 2) => v.toFixed(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------- heatmap rendering ----------
+const imgCache = {};
+function loadImg(idx) {
+  if (!imgCache[idx]) imgCache[idx] = new Promise(res => { const im = new Image(); im.onload = () => res(im); im.src = `/api/img/${idx}?s=1`; });
+  return imgCache[idx];
+}
+function colormap(t) { // dark-transparent → yellow
+  t = Math.max(0, Math.min(1, t));
+  return [255, Math.round(80 + 175 * t), Math.round(40 * (1 - t)), Math.round(210 * t)];
+}
+async function drawHeat(canvas, idx, map, vmax, opts = {}) {
+  const N = canvas.width, ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(await loadImg(idx), 0, 0, N, N);
+  if (!map) return;
+  const H = map.length, W = map[0].length, small = document.createElement("canvas");
+  small.width = W; small.height = H;
+  const sc = small.getContext("2d"), id = sc.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = map[y][x], [r, g, b, a] = opts.signed
+      ? (v >= 0 ? [89, 212, 138, Math.min(230, 230 * v / vmax)] : [255, 122, 106, Math.min(230, 230 * -v / vmax)])
+      : colormap(vmax > 0 ? v / vmax : 0);
+    id.data.set([r, g, b, a], 4 * (y * W + x));
+  }
+  sc.putImageData(id, 0, 0);
+  ctx.globalAlpha = opts.alpha ?? 0.75;
+  ctx.imageSmoothingEnabled = !!opts.smooth;
+  ctx.drawImage(small, 0, 0, N, N);
+  ctx.globalAlpha = 1;
+  if (opts.grid) {
+    ctx.strokeStyle = "rgba(255,255,255,.15)"; ctx.lineWidth = 1;
+    for (let i = 1; i < W; i++) { ctx.beginPath(); ctx.moveTo(i * N / W, 0); ctx.lineTo(i * N / W, N); ctx.stroke(); }
+    for (let i = 1; i < H; i++) { ctx.beginPath(); ctx.moveTo(0, i * N / H); ctx.lineTo(N, i * N / H); ctx.stroke(); }
+  }
+  if (opts.cell) {
+    const [cy, cx] = opts.cell; ctx.strokeStyle = "#6aa9ff"; ctx.lineWidth = 2;
+    ctx.strokeRect(cx * N / W + 1, cy * N / H + 1, N / W - 2, N / H - 2);
+  }
+  for (const [py, px] of opts.ablated || []) {
+    ctx.strokeStyle = "#ff7a6a"; ctx.lineWidth = 2; ctx.setLineDash([3, 2]);
+    ctx.strokeRect(px * N / W + 1, py * N / H + 1, N / W - 2, N / H - 2); ctx.setLineDash([]);
+  }
+}
+
+// ---------- ablation set ----------
+const ablKey = a => `${a.layer}:${a.channel}`;
+function addAbl(layer, channel, pos) {
+  let a = S.abl.find(a => ablKey(a) === `${layer}:${channel}`);
+  if (!a) { a = { layer, channel, positions: pos ? [] : null }; S.abl.push(a); }
+  if (pos) {
+    if (a.positions === null) return renderAbl();       // whole channel already covers it
+    if (!a.positions.some(p => p[0] === pos[0] && p[1] === pos[1])) a.positions.push(pos);
+  } else a.positions = null;
+  renderAbl(); refreshImage();
+}
+function renderAbl() {
+  window.mapRefresh?.();
+  $("#ablset").innerHTML = S.abl.length ? S.abl.map((a, i) =>
+    `<span class="chip"><a style="cursor:pointer" onclick="openNeuron('${a.layer}',${a.channel})">${short(a.layer)}·${a.channel}</a>
+     <span class="hint">${a.positions ? a.positions.map(p => `(${p[0]},${p[1]})`).join(" ") : "all"}</span>
+     <button onclick="S.abl.splice(${i},1);renderAbl();refreshImage()">×</button></span>`).join("")
+    : `<div class="hint">Empty. Add whole channels from the neuron view, or single cells from the image probe.</div>`;
+}
+
+// ---------- browser ----------
+async function loadList() {
+  const q = new URLSearchParams({ layer: S.layer }); if (S.concept) q.set("concept", S.concept);
+  S.list = await api("/api/neurons?" + q);
+  $("#scoreName").innerHTML = S.concept ? `(${tex("d'")} for concept)` : `(best-class ${tex("d'")})`;
+  $("#topn").hidden = !S.concept;
+  renderList();
+}
+function renderList() {
+  $("#nlist").innerHTML = S.list.map(n => `<div data-c="${n.channel}" class="${S.sel && S.sel.layer === S.layer && S.sel.channel === n.channel ? "on" : ""}">
+    <span>#${n.channel}</span><span class="lbl"><b>${esc(n.fine)}</b> · ${esc(n.coarse)}</span><span class="num">${fmt(n.score)}</span></div>`).join("");
+}
+$("#nlist").onclick = e => { const d = e.target.closest("[data-c]"); if (d) openNeuron(S.layer, +d.dataset.c); };
+
+// ---------- neuron view ----------
+function showTab(t) {
+  for (const [id, name] of [["#tabMap", "map"], ["#tabNeuron", "neuron"], ["#tabSweep", "sweep"]]) $(id).classList.toggle("on", t === name);
+  $("#mapView").hidden = t !== "map"; $("#neuron").hidden = t !== "neuron"; $("#sweep").hidden = t !== "sweep";
+  if (t === "map") window.mapResize?.();
+}
+function fvStyle(layer, c, px) {
+  const cols = 16, rows = Math.ceil(S.meta.layers.find(l => l.name === layer).C / cols);
+  return `background-image:url(/api/fv/${layer}?kind=${S.fvKind});background-size:${cols * px}px ${rows * px}px;background-position:-${(c % cols) * px}px -${Math.floor(c / cols) * px}px`;
+}
+function kernelSvg(k) { // 3x3x3 RGB stem filter, each tap shown as a colored square
+  const v = Math.max(...k.flat(2).map(Math.abs), 1e-6), col = x => Math.round(127.5 + 127.5 * x / v);
+  return `<svg viewBox="0 0 3 3" width="96" height="96" style="image-rendering:pixelated;border-radius:4px">${k.map((row, y) => row.map((p, x) =>
+    `<rect x="${x}" y="${y}" width="1" height="1" fill="rgb(${col(p[0])},${col(p[1])},${col(p[2])})"/>`).join("")).join("")}</svg>`;
+}
+async function openNeuron(layer, c) {
+  showTab("neuron");
+  $("#neuron").innerHTML = `<div class="empty">loading ${short(layer)}·${c}…</div>`;
+  const n = await api(`/api/neuron/${layer}/${c}?k=24`);
+  S.sel = n; if (layer === S.layer) renderList(); window.mapRefresh?.();
+  const maxSel = Math.max(...n.fine.map(f => Math.abs(f.sel)), 1e-6);
+  const hmax = Math.max(...n.hist.counts);
+  $("#neuron").innerHTML = `
+    <div class="row" style="justify-content:space-between">
+      <div><h2 style="margin:0">${layer} · channel ${c}</h2><div class="hint">grid ${tex(`${n.shape[0]}\\times ${n.shape[1]}`)} · unit = spatial max</div></div>
+      <div class="row"><button class="primary" id="addCh">ablate channel</button><button id="showOnImg">show on current image</button></div>
+    </div>
+    <div class="row" style="align-items:flex-start;gap:16px">
+      <div><div class="hint">feature viz · ${S.fvKind === "center" ? "center unit, cropped to receptive field" : "whole channel"}</div><div class="fvbig" style="${fvStyle(layer, c, 160)}"></div></div>
+      ${n.kernel ? `<div><div class="hint">RGB kernel (${tex("3\\times 3")})</div>${kernelSvg(n.kernel)}</div>` : ""}
+    </div>
+    <div class="row">${n.coarse.map(x => `<span class="chip" style="padding-right:9px">${esc(x.name)} <span class="hint">${fmt(x.sel)}</span></span>`).join("")}</div>
+    <div style="display:grid;grid-template-columns:1fr 200px;gap:16px">
+      <div><h2>Most selective classes (${tex("d'")})</h2><div class="bars">${n.fine.map(f =>
+        `<div><span>${esc(f.name)}</span><span class="bar"><i style="width:${100 * Math.max(0, f.sel) / maxSel}%"></i></span><span class="num">${fmt(f.sel)}</span></div>`).join("")}</div></div>
+      <div><h2>Activation distribution</h2><svg viewBox="0 0 200 70" width="200" height="70">${n.hist.counts.map((v, i) =>
+        `<rect x="${i * 5}" y="${70 - 66 * v / hmax}" width="4" height="${66 * v / hmax}" fill="#6aa9ff"/>`).join("")}</svg>
+        <div class="hint" style="display:flex;justify-content:space-between"><span>${fmt(n.hist.lo)}</span><span>${fmt(n.hist.hi)}</span></div></div>
+    </div>
+    <h2>Zeiler–Fergus view <span class="hint">· top 9 units projected back to pixels, beside their receptive-field patches</span></h2>
+    <div class="row"><select id="zfRule"><option value="guided">guided backprop</option><option value="deconv">deconvnet (paper; image-independent without max-pool switches)</option></select>
+      <span class="hint" id="zfInfo"></span></div>
+    <div class="row" style="gap:20px;align-items:flex-start"><div><div class="hint">projections</div><div class="zf" id="zfProj"></div></div>
+      <div><div class="hint">image patches</div><div class="zf" id="zfPatch"></div></div></div>
+    <h2>Top activating test images <span class="hint">· click to open in lab</span></h2>
+    <div class="grid" id="topgrid">${n.top.map((t, i) => `<div class="cell" data-idx="${t.idx}"><canvas width="112" height="112"></canvas>
+      <div class="cap"><span>${esc(t.label)}</span><span>${fmt(t.act, 1)}</span></div></div>`).join("")}</div>`;
+  const cvs = [...document.querySelectorAll("#topgrid canvas")];
+  n.top.forEach((t, i) => drawHeat(cvs[i], t.idx, t.map, t.vmax, { smooth: n.shape[0] < 32 }));
+  $("#addCh").onclick = () => addAbl(layer, c, null);
+  $("#zfRule").value = S.zfRule || "guided";
+  $("#zfRule").onchange = e => { S.zfRule = e.target.value; loadZF(layer, c); };
+  loadZF(layer, c);
+  $("#showOnImg").onclick = () => showChannelOnImage(layer, c);
+  $("#topgrid").onclick = e => { const d = e.target.closest("[data-idx]"); if (d) setImage(+d.dataset.idx); };
+}
+
+async function loadZF(layer, c) {
+  $("#zfInfo").textContent = "projecting…";
+  const z = await api(`/api/zf/${layer}/${c}?k=9&rule=${S.zfRule || "guided"}`);
+  if (!S.sel || S.sel.layer !== layer || S.sel.channel !== c) return; // user moved on
+  const cell = (it, key) => `<img src="${it[key]}" data-idx="${it.idx}" title="#${it.idx} ${esc(it.label)} · act ${fmt(it.act)} at (${it.pos})">`;
+  $("#zfProj").innerHTML = z.items.map(it => cell(it, "proj")).join("");
+  $("#zfPatch").innerHTML = z.items.map(it => cell(it, "patch")).join("");
+  $("#zfInfo").innerHTML = `receptive field ${tex(`${z.rf[0]}\\times ${z.rf[1]}`)} px`;
+  for (const g of ["#zfProj", "#zfPatch"]) $(g).onclick = e => { if (e.target.dataset.idx) setImage(+e.target.dataset.idx); };
+}
+
+// ---------- image lab ----------
+function setImage(idx) {
+  S.img = idx; $("#imgIdx").value = idx; S.cell = null; S.overlay = null;
+  $("#probeOut").innerHTML = "";
+  document.querySelectorAll("#thumbs img").forEach(im => im.classList.toggle("on", +im.dataset.idx === idx));
+  refreshImage();
+}
+async function refreshImage() {
+  const r = await api("/api/run", { idx: S.img, ablations: S.abl, mode: $("#mode").value, layer: S.ovLayer });
+  S.run = r; renderPreds(); renderAttr(); drawBig(); window.mapRefresh?.();
+}
+function predBars(list, cls) {
+  return list.map(p => `<div><span>${esc(p.name)}</span><span class="bar"><i class="${cls}" style="width:${100 * p.p}%"></i></span><span class="num">${fmt(100 * p.p, 1)}%</span></div>`).join("");
+}
+function renderPreds() {
+  const r = S.run;
+  $("#preds").innerHTML = `<h2>Prediction <span class="hint">· true: ${esc(r.label)}</span></h2>
+    <div style="display:grid;grid-template-columns:${r.ablated ? "1fr 1fr" : "1fr"};gap:12px">
+      <div><div class="hint">clean</div><div class="bars">${predBars(r.base, "")}</div></div>
+      ${r.ablated ? `<div><div class="hint">ablated (${S.abl.length})</div><div class="bars">${predBars(r.ablated, "after")}</div></div>` : ""}
+    </div>`;
+}
+function renderAttr() {
+  const r = S.run, m = Math.max(...r.attribution.map(a => Math.abs(a.attr)), 1e-6);
+  $("#attrOut").innerHTML = `<h2>Channels driving “${esc(r.pred)}” in ${r.layer} <span class="hint">· ${tex("a \\odot \\nabla_{a}\\, y_c")}</span></h2>
+    <div class="list">${r.attribution.map(a => `<div><a onclick="openNeuron('${r.layer}',${a.channel})">#${a.channel}</a>
+      <span class="bar"><i style="width:${100 * Math.max(0, a.attr) / m}%"></i></span>
+      <span><button class="mini" onclick="showAttrMap(${a.channel})">map</button> <button class="mini" onclick="addAbl('${r.layer}',${a.channel},null)">ablate</button></span></div>`).join("")}</div>`;
+}
+function showAttrMap(c) {
+  const a = S.run.attribution.find(a => a.channel === c), v = Math.max(...a.map.flat().map(Math.abs), 1e-6);
+  S.overlay = { map: a.map, vmax: v, signed: true, info: `attribution of #${c} to “${S.run.pred}” (green +, red −)` }; drawBig();
+}
+async function showChannelOnImage(layer, c) {
+  if (layer !== S.ovLayer) { S.ovLayer = layer; $("#ovLayer").value = layer; await refreshImage(); }
+  const r = await api("/api/map", { idx: S.img, layer, channel: c, ablations: S.abl, mode: $("#mode").value });
+  const v = Math.max(...r.map.flat(), 1e-6);
+  S.overlay = { map: r.map, vmax: v, info: `${short(layer)}·${c} max ${fmt(v)} · after ablation ${fmt(Math.max(...r.ablated.flat()))}` }; drawBig();
+}
+function drawBig() {
+  const L = S.meta.layers.find(l => l.name === S.ovLayer);
+  const abl = S.abl.filter(a => a.layer === S.ovLayer && a.positions).flatMap(a => a.positions);
+  const blank = Array.from({ length: L.H }, () => Array(L.W).fill(0));
+  const o = S.overlay || { map: blank, vmax: 1 };
+  drawHeat($("#big"), S.img, o.map, o.vmax, { grid: L.H <= 16, cell: S.cell, ablated: abl, signed: o.signed, smooth: o.smooth, alpha: 0.7 });
+  $("#ovInfo").textContent = o.info || "";
+}
+$("#big").onclick = async e => {
+  const L = S.meta.layers.find(l => l.name === S.ovLayer), rect = e.target.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / rect.width * L.W), y = Math.floor((e.clientY - rect.top) / rect.height * L.H);
+  S.cell = [y, x];
+  const p = await api("/api/probe", { idx: S.img, layer: S.ovLayer, y, x });
+  const m = Math.max(p.cells[0]?.act || 1e-6, 1e-6);
+  $("#probeOut").innerHTML = `<h2>Channels firing at ${short(S.ovLayer)} (${y},${x})</h2>
+    <div class="list">${p.cells.map((c, i) => `<div><a onclick="openNeuron('${S.ovLayer}',${c.channel})">#${c.channel}</a>
+      <span class="bar"><i style="width:${100 * c.act / m}%"></i></span>
+      <span><button class="mini" data-i="${i}">map</button> <button class="mini" onclick="addAbl('${S.ovLayer}',${c.channel},[${y},${x}])">ablate here</button>
+      <button class="mini" onclick="addAbl('${S.ovLayer}',${c.channel},null)">all</button></span></div>`).join("")}</div>`;
+  $("#probeOut").querySelectorAll("[data-i]").forEach(b => b.onclick = () => {
+    const c = p.cells[+b.dataset.i]; S.overlay = { map: c.map, vmax: Math.max(...c.map.flat(), 1e-6), info: `${short(S.ovLayer)}·${c.channel} activation` }; drawBig();
+  });
+  drawBig();
+};
+
+async function runOcclusion(target) {
+  $("#ovInfo").textContent = "occluding…";
+  const r = await api("/api/occlusion", { idx: S.img, size: +$("#occSize").value, stride: 2, target });
+  const v = Math.max(...r.map.flat().map(Math.abs), 1e-6);
+  S.overlay = { map: r.map, vmax: v, signed: true, smooth: true,
+    info: `occluding ${r.size}px squares: green = ${r.target} drops (base ${fmt(r.base, 3)}), red = it rises` };
+  drawBig();
+}
+$("#occCls").onclick = () => runOcclusion({});
+$("#occUnit").onclick = () => S.sel ? runOcclusion({ layer: S.sel.layer, channel: S.sel.channel }) : alert("Open a neuron first.");
+
+// ---------- N-channel sweep ----------
+const SERIES = [ // validated dark categorical slots 1-4 (all checks pass on #0f1115)
+  { key: "top_zero", field: "target", color: "#3987e5", label: "concept · top-N zeroed" },
+  { key: "top_mean", field: "target", color: "#d95926", label: "concept · top-N mean" },
+  { key: "rand_zero", field: "target", color: "#199e70", label: "concept · random-N zeroed" },
+  { key: "top_zero", field: "other", color: "#c98500", label: "other classes · top-N zeroed" },
+];
+async function runSweep() {
+  if (!S.concept) return alert("Pick a concept first.");
+  showTab("sweep");
+  const name = $("#concept").selectedOptions[0].textContent;
+  $("#sweep").innerHTML = `<div class="empty">Sweeping ${esc(name)} at ${S.layer}: 12 values of ${tex("N")} × 3 conditions over 10k images (~1–2 min)…</div>`;
+  const r = await api("/api/sweep", { layer: S.layer, concept: S.concept });
+  renderSweep(r, name);
+}
+function renderSweep(r, name) {
+  const pct = v => `${fmt(100 * v, 1)}%`, last = r.rows[r.rows.length - 1];
+  const W = Math.max(520, $("#sweep").clientWidth - 24), H = 340, m = { l: 44, r: 200, t: 16, b: 36 };
+  const xs = r.rows.map(d => d.n), lx = Math.log(xs[0]), hx = Math.log(xs[xs.length - 1]);
+  const X = n => m.l + (Math.log(n) - lx) / (hx - lx) * (W - m.l - m.r), Y = v => m.t + (1 - v) * (H - m.t - m.b);
+  const grid = [0, .25, .5, .75, 1].map(v => `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="#262b36"/><text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v * 100}%</text>`).join("");
+  const xt = xs.map(n => `<text x="${X(n)}" y="${H - m.b + 16}" text-anchor="middle">${n}</text>`).join("");
+  const vline = (n, txt) => n == null ? "" : `<line x1="${X(n)}" x2="${X(n)}" y1="${m.t}" y2="${H - m.b}" stroke="#8b93a7" stroke-dasharray="3 3"/>${X(n) - m.l < 70 ? `<text x="${X(n) + 4}" y="${H - m.b - 6}">${txt}</text>` : `<text x="${X(n) - 4}" y="${H - m.b - 6}" text-anchor="end">${txt}</text>`}`;
+  const baseLine = `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(r.base.target)}" y2="${Y(r.base.target)}" stroke="#3987e5" stroke-opacity=".35" stroke-dasharray="2 4"/>`;
+  // direct labels at line ends, nudged apart so they never collide
+  const ends = SERIES.map(s => ({ s, y: Y(last[s.key][s.field]) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 14);
+  const over = ends[ends.length - 1].y - (H - m.b); // labels piled past the x-axis: shift the stack up
+  if (over > 0) for (let i = ends.length - 1; i >= 0; i--) ends[i].y = Math.min(ends[i].y - over, i < ends.length - 1 ? ends[i + 1].y - 14 : Infinity);
+  const lines = SERIES.map(s => {
+    const pts = r.rows.map(d => [X(d.n), Y(d[s.key][s.field])]);
+    const dots = r.rows.map((d, i) => { // filled = drop significant (p<.05), hollow = not; concept series only
+      const sig = s.field === "target" && d[s.key].p < 0.05;
+      return `<circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="4" fill="${sig || s.field === "other" ? s.color : "#0f1115"}" stroke="${s.color}" stroke-width="2"/>`;
+    }).join("");
+    return `<polyline points="${pts.map(p => p.join(",")).join(" ")}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round"/>${dots}`;
+  }).join("");
+  const labels = ends.map(e => `<text x="${W - m.r + 8}" y="${e.y + 4}" style="fill:var(--text)"><tspan fill="${e.s.color}" style="fill:${e.s.color}">●</tspan> ${esc(e.s.label)}</text>`).join("");
+  const nEq = n => n ? tex(`N = ${n}`) : "not reached";
+  const sigTxt = nEq(r.first_significant);
+  $("#sweep").innerHTML = `
+    <h2 style="margin-top:0">${esc(name)} · ${r.layer} · ${r.n_target} concept images</h2>
+    <div><span class="stat"><span class="hint">significant drop (${tex("p < 0.05")})</span><b>${sigTxt}</b></span>
+      <span class="stat"><span class="hint">concept accuracy halved</span><b>${nEq(r.first_halved)}</b></span>
+      <span class="stat"><span class="hint">other classes ${tex("-2")} pts</span><b>${nEq(r.first_off_target)}</b></span>
+      <span class="stat"><span class="hint">baseline concept acc</span><b>${pct(r.base.target)}</b></span></div>
+    <div class="sw-chart"><svg width="${W}" height="${H}" role="img" aria-label="accuracy versus number of ablated channels">
+      ${grid}${xt}<text x="${(W - m.r + m.l) / 2}" y="${H - 4}" text-anchor="middle">channels ablated (<tspan font-style="italic">N</tspan>, log scale)</text>
+      ${baseLine}${vline(r.first_significant, "significant")}${vline(r.first_halved, "halved")}${lines}${labels}
+      <line id="swX" y1="${m.t}" y2="${H - m.b}" stroke="#e6e8ee" stroke-opacity=".4" visibility="hidden"/>
+      <rect id="swHit" x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/></svg>
+      <div class="sw-tip" id="swTip"></div></div>
+    <div class="hint">Filled markers: drop vs. baseline on concept images is significant (exact one-sided McNemar, ${tex("p < 0.05")}); hollow: not. Random-${tex("N")} control uses one fixed random channel order.</div>
+    <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">table</summary>
+      <table style="margin-top:6px"><tr><th class="num">N</th>${SERIES.map(s => `<th class="num">${esc(s.label)}</th>`).join("")}<th class="num">p (top-N zero)</th></tr>
+      ${r.rows.map(d => `<tr><td class="num">${d.n}</td>${SERIES.map(s => `<td class="num">${pct(d[s.key][s.field])}</td>`).join("")}<td class="num">${d.top_zero.p < 1e-4 ? "<1e-4" : fmt(d.top_zero.p, 4)}</td></tr>`).join("")}</table></details>`;
+  const hit = $("#swHit"), tip = $("#swTip"), cross = $("#swX");
+  hit.onmousemove = e => {
+    const bx = hit.getBoundingClientRect(), px = e.clientX - bx.left + m.l;
+    const d = r.rows.reduce((a, b) => Math.abs(X(b.n) - px) < Math.abs(X(a.n) - px) ? b : a);
+    cross.setAttribute("x1", X(d.n)); cross.setAttribute("x2", X(d.n)); cross.setAttribute("visibility", "visible");
+    tip.innerHTML = `<b>${tex(`N = ${d.n}`)}</b>${SERIES.map(s => `<div class="k"><span class="sw" style="background:${s.color}"></span><span>${esc(s.label)}</span><span class="num">${pct(d[s.key][s.field])}</span></div>`).join("")}<div class="hint">${tex(d.top_zero.p < 1e-4 ? "p < 10^{-4}" : `p = ${fmt(d.top_zero.p, 4)}`)}</div>`;
+    tip.style.display = "block"; tip.style.left = Math.min(X(d.n) + 12, W - 230) + "px"; tip.style.top = "20px";
+  };
+  hit.onmouseleave = () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); };
+}
+
+// ---------- evaluation ----------
+$("#evalBtn").onclick = async () => {
+  if (!S.abl.length) return alert("Ablation set is empty.");
+  $("#evalOut").innerHTML = `<div class="hint">running 10k test images…</div>`;
+  const r = await api("/api/eval", { ablations: S.abl, mode: $("#mode").value });
+  const d = x => (x.after - x.before), sgn = v => `<span class="${v < 0 ? "neg" : v > 0 ? "pos" : ""}">${v > 0 ? "+" : ""}${fmt(100 * v, 1)}</span>`;
+  const cls = [...r.classes].sort((a, b) => d(a) - d(b));
+  const sup = [...r.coarse].sort((a, b) => d(a) - d(b));
+  $("#evalOut").innerHTML = `
+    <div class="row" style="margin-top:8px"><b>Overall</b> ${fmt(100 * r.overall[0], 1)}% → ${fmt(100 * r.overall[1], 1)}% (${sgn(r.overall[1] - r.overall[0])})</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <table><tr><th>class</th><th class="num">before</th><th class="num">${tex("\\Delta")}</th></tr>${cls.slice(0, 8).map(c =>
+      `<tr><td>${esc(c.name)}</td><td class="num">${fmt(100 * c.before, 0)}</td><td class="num">${sgn(d(c))}</td></tr>`).join("")}</table>
+    <table><tr><th>superclass</th><th class="num">${tex("\\Delta")}</th></tr>${sup.slice(0, 8).map(c =>
+      `<tr><td>${esc(c.name)}</td><td class="num">${sgn(d(c))}</td></tr>`).join("")}</table></div>
+    <div class="hint" style="margin-top:6px">Unaffected-ish: median class ${tex("\\Delta")} ${sgn(d(cls[50]))} · least hurt: ${esc(cls[99].name)} ${sgn(d(cls[99]))}</div>
+    ${r.flows.length ? `<h2>Where predictions moved</h2><div class="hint">${r.flows.map(f => `${esc(f.from)} → ${esc(f.to)} (${f.n})`).join(" · ")}</div>` : ""}`;
+};
+
+// ---------- init ----------
+(async () => {
+  S.meta = await api("/api/meta");
+  $("#acc").textContent = `test acc ${fmt(100 * S.meta.acc, 1)}%`;
+  $("#layers").innerHTML = S.meta.layers.map(l => `<button data-l="${l.name}" class="${l.name === S.layer ? "on" : ""}">${short(l.name)} <span class="hint">${tex(`${l.C}\\cdot ${l.H}^2`)}</span></button>`).join("");
+  $("#layers").onclick = e => { const b = e.target.closest("[data-l]"); if (!b) return; S.layer = b.dataset.l;
+    document.querySelectorAll("#layers button").forEach(x => x.classList.toggle("on", x === b)); loadList(); };
+  $("#concept").innerHTML += `<optgroup label="superclass">${S.meta.coarse.map((c, i) => `<option value="coarse:${i}">${c.replaceAll("_", " ")}</option>`).join("")}</optgroup>
+    <optgroup label="class">${S.meta.fine.map((c, i) => `<option value="fine:${i}">${c.replaceAll("_", " ")}</option>`).join("")}</optgroup>`;
+  $("#concept").onchange = e => { S.concept = e.target.value; loadList();
+    if (S.concept) $("#colorMode").value = "concept"; window.mapRefresh?.(); };
+  $("#ablTop").onclick = () => { S.list.slice(0, +$("#nTop").value).forEach(n => { if (!S.abl.some(a => ablKey(a) === `${S.layer}:${n.channel}`)) S.abl.push({ layer: S.layer, channel: n.channel, positions: null }); }); renderAbl(); refreshImage(); };
+  $("#ovLayer").innerHTML = S.meta.layers.map(l => `<option value="${l.name}">${l.name} (${l.H}×${l.W})</option>`).join("");
+  $("#ovLayer").value = S.ovLayer;
+  $("#ovLayer").onchange = e => { S.ovLayer = e.target.value; S.cell = null; S.overlay = null; $("#probeOut").innerHTML = ""; refreshImage(); };
+  $("#imgClass").innerHTML = S.meta.fine.map((c, i) => `<option value="${i}">${c.replaceAll("_", " ")}</option>`).join("");
+  $("#imgClass").onchange = e => {
+    const ids = S.meta.by_class[e.target.value];
+    $("#thumbs").innerHTML = ids.map(i => `<img src="/api/img/${i}?s=2" data-idx="${i}">`).join("");
+    setImage(ids[0]);
+  };
+  $("#thumbs").onclick = e => { if (e.target.dataset.idx) setImage(+e.target.dataset.idx); };
+  $("#imgIdx").onchange = e => setImage(+e.target.value);
+  $("#rand").onclick = () => setImage(Math.floor(Math.random() * 10000));
+  $("#mode").onchange = refreshImage;
+  $("#clear").onclick = () => { S.abl = []; renderAbl(); refreshImage(); };
+  $("#fvKind").onchange = e => { S.fvKind = e.target.value; }; // hover cards and the next neuron view pick it up
+  $("#tabSweep").onclick = () => showTab("sweep");
+  $("#sweepBtn").onclick = runSweep;
+  $("#tabMap").onclick = () => showTab("map"); $("#tabNeuron").onclick = () => showTab("neuron");
+  renderAbl(); $("#imgClass").onchange({ target: $("#imgClass") });
+  await loadList();
+  window.appReady = true; window.dispatchEvent(new Event("app-ready"));
+  const m = location.hash.match(/^#sweep=([^:]+):(.+)$/); // deep link, e.g. #sweep=layer4.1:fine:53
+  if (m) { S.layer = m[1]; S.concept = m[2]; $("#concept").value = m[2]; runSweep(); }
+})();
+</script>
+<script type="module" src="/static/map.js"></script>
+</body>
+</html>

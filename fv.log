@@ -1,0 +1,9 @@
+stem 64
+layer1.0 64
+layer1.1 64
+layer2.0 128
+layer2.1 128
+layer3.0 256
+layer3.1 256
+layer4.0 512
+layer4.1 512
